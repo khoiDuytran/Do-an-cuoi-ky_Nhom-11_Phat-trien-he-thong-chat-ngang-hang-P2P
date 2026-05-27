@@ -136,7 +136,7 @@ Sau khi build thành công, bạn sẽ có 3 JAR files:
 
 ### Bước 1: Khởi động Bootstrap Server
 
-Mở terminal và chạy:
+Mở terminal và chạy: (**khuyến khích chạy port 9000 - giống trong BootstrapDefaults**)
 
 ```bash
 java -jar bootstrap-server/target/bootstrap-server.jar 9000 localhost 3306 root <your_password>
@@ -154,7 +154,7 @@ java -jar bootstrap-server/target/bootstrap-server.jar 9000 localhost 3306 root 
 
 ```
 Bootstrap Server started on port 9000
-Listening on: x.x.x.x:9000
+Listening on: x.x.x.x:9000 (**bootstrap sẽ luôn chạy trên IP của máy tính**)
 ```
 
 **Lưu ý IP LAN này**, bạn sẽ cần dùng nó cho peer kết nối.
@@ -163,6 +163,7 @@ Listening on: x.x.x.x:9000
 
 ### Bước 2: Khởi động Relay Server (Tùy chọn)
 
+**Lưu ý IP LAN là Ip của máy tính và Port này phải giống port trong RelayDefaults (Peer-client) - khuyến kích port 9100**
 Mở **terminal thứ 2** và chạy:
 
 ```bash
@@ -213,7 +214,7 @@ Sau khi đăng nhập, chọn **"Connect via Bootstrap"** hoặc **"Connect via 
 
 **Cách 2: Qua Known Peer**
 
-- Nhập IP + Port của một peer đã biết
+- Nhập IP + Port của một peer đã biết (**vì chạy trên 1 máy nên IP đều là IP của máy**)
 - Click **Connect**
 
 ---
@@ -276,6 +277,14 @@ Trên **Windows**, bạn có thể cần mở các cổng này trên Windows Def
 1. Click nút **Broadcast** trong cửa sổ chat
 2. Nhập tin nhắn
 3. Tin nhắn sẽ gửi tới **tất cả** peers đang online
+
+### Store and Forward
+
+1. Đảm bảo Relay-server đã chạy
+2. Peer A và Peer B đã join mạng (connect qua bootstrap/known peer)
+3. Đóng cửa sổ Peer B
+4. A gửi 1 tin nhắn cho B(offline)
+5. B join lại mạng và thấy tin nhắn chờ của A được Relay gửi
 
 ---
 
