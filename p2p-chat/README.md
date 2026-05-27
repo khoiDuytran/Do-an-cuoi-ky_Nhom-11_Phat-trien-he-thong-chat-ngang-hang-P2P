@@ -28,7 +28,7 @@ cd p2p-chat
 
 ### 2. ⚠️ Cấu hình thông tin Database MySQL (QUAN TRỌNG!)
 
-Trước khi build, **bạn phải thay đổi thông tin DB** ở 5 file sau:
+Trước khi build, **bạn phải thay đổi thông tin DB** ở 3 file sau:
 
 #### File 1: RelayDatabaseConfig
 
@@ -48,25 +48,7 @@ private String username = "your_username";
 private String password = "your_password";
 ```
 
-#### File 2: RelayServer
-
-**File:** `relay-server/src/main/java/com/p2pchat/relay/RelayServer.java`
-
-Tìm dòng:
-
-```java
-String dbUser = args.length > 3 ? args[3] : ;
-String dbPass = args.length > 4 ? args[4] : ;
-```
-
-Thay thành username và password MySQL của bạn:
-
-```java
-String dbUser = args.length > 3 ? args[3] : "your_username";
-String dbPass = args.length > 4 ? args[4] : "your_password";
-```
-
-#### File 3: DatabaseConfig (Peer Client)
+#### File 2: DatabaseConfig (Peer Client)
 
 **File:** `peer-client/src/main/java/com/p2pchat/peer/repository/DatabaseConfig.java`
 
@@ -84,7 +66,7 @@ private String username = "your_username";
 private String password = "your_password";
 ```
 
-#### File 4: PeerApp
+#### File 3: PeerApp
 
 **File:** `peer-client/src/main/java/com/p2pchat/peer/PeerApp.java`
 
@@ -102,36 +84,16 @@ private static final String DB_USER = "your-username";
 private static final String DB_PASSWORD = "your-password";
 ```
 
-#### File 5: Bootstrap-Server
-
-**File:** `peer-client/src/main/java/com/p2pchat/bootstrap/network/BootstrapServer.java`
-
-Tìm dòng:
-
-```java
-String dbUser = args.length > 3 ? args[3] : ;
-String dbPass = args.length > 4 ? args[4] : ;
-```
-
-Thay thành username và password MySQL của bạn:
-
-```java
-String dbUser = args.length > 3 ? args[3] : "your-username";
-String dbPass = args.length > 4 ? args[4] : "your-password";
-```
-
-**Lưu ý:** Bootstrap Server sẽ nhận thông tin DB từ tham số command line (bạn sẽ nhập khi chạy).
-
-### 3. Config IP máy vào RelayDefaults (QUAN TRỌNG) và BootstrapDefaults
+### 3. Config IP máy vào RelayDefaults (QUAN TRỌNG) và BootstrapDefaults trong peer-client
 
 **File:** `peer-client/src/main/java/com/p2pchat/peer/RelayDefaults.java`
 **File:** `peer-client/src/main/java/com/p2pchat/peer/BootstrapDefaults.java`
 
 Chạy ipconfig trên cmd trên máy để lấy IP:
 
-**Ethernet adapter vEthernet (Default Switch): // ví dụ**
-
 ```
+Ethernet adapter vEthernet (Default Switch): // ví dụ
+
 Connection-specific DNS Suffix . :
 Link-local IPv6 Address . . . . . : fe80::4de8:570a:660b:88fe%14
 IPv4 Address. . . . . . . . . . . : 172.23.160.1                // IP sẽ lấy
