@@ -1,0 +1,18 @@
+# Environment variables
+.env
+.env.local
+
+# Project exclude paths
+/bootstrap-server/target/
+/peer-client/target/
+/relay-server/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
