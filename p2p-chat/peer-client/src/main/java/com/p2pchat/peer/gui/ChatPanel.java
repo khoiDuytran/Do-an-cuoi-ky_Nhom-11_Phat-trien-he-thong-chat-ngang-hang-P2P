@@ -43,7 +43,6 @@ public class ChatPanel extends JPanel {
         setLayout(new BorderLayout());
         setBackground(Color.WHITE);
 
-        // ─── Header ──────────────────────────────────────────────────────────
         JPanel header = new JPanel(new BorderLayout(10, 0));
         header.setBackground(new Color(248, 248, 248));
         header.setBorder(BorderFactory.createCompoundBorder(
@@ -86,7 +85,6 @@ public class ChatPanel extends JPanel {
         header.add(actions, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
 
-        // ─── Messages Area ────────────────────────────────────────────────────
         messagesPanel = new JPanel();
         messagesPanel.setLayout(new BoxLayout(messagesPanel, BoxLayout.Y_AXIS));
         messagesPanel.setBackground(new Color(242, 242, 247));
@@ -100,7 +98,6 @@ public class ChatPanel extends JPanel {
         scrollPane.getViewport().setBackground(new Color(242, 242, 247));
         add(scrollPane, BorderLayout.CENTER);
 
-        // ─── Input Area ───────────────────────────────────────────────────────
         JPanel inputPanel = new JPanel(new BorderLayout(8, 0));
         inputPanel.setBackground(Color.WHITE);
         inputPanel.setBorder(BorderFactory.createCompoundBorder(

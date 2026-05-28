@@ -7,9 +7,7 @@ import java.time.LocalDateTime;
  */
 public class ChatMessage {
 
-    /** Tin file chờ tải: dòng 1 marker, 2 = tên file, 3 = kích thước (bytes). */
     public static final String FILE_PENDING_MARKER = "__P2P_FILE__";
-    /** Đã lưu xuống đĩa: dòng 1 marker, dòng 2 = đường dẫn tuyệt đối. */
     public static final String FILE_SAVED_MARKER = "__P2P_FILE_SAVED__";
 
     private Long id;
@@ -63,9 +61,7 @@ public class ChatMessage {
         return cm;
     }
 
-    /**
-     * Tin nhắn dạng file đính kèm (content hiển thị: tên file + đường dẫn local).
-     */
+    // Tin nhắn dạng file đính kèm (content hiển thị: tên file + đường dẫn local).
     public static ChatMessage fromDirectFile(String messageId, String senderPeerId,
             String senderUsername, String targetPeerId,
             String displayContent, boolean isOwn) {

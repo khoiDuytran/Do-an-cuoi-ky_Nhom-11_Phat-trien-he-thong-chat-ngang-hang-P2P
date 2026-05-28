@@ -11,11 +11,6 @@ import java.util.logging.*;
 
 /**
  * Entry point của ứng dụng Peer.
- * Luồng khởi động:
- * 1. Hiện LoginDialog (username + myPort)
- * 2. Khởi tạo MySQL local bằng cấu hình cố định trong code
- * 3. Tạo P2PNode và vào MainWindow ngay
- * 4. User bấm Connect trong MainWindow để join mạng
  */
 public class PeerApp {
     private static final String DB_HOST = "localhost";

@@ -31,7 +31,7 @@ public class RelayClientHandler implements Runnable {
     private int port;
 
     public RelayClientHandler(Socket socket, RelayRepository repo,
-                             RelayClientHandlerRegistry registry, Runnable onDisconnect) {
+            RelayClientHandlerRegistry registry, Runnable onDisconnect) {
         this.socket = socket;
         this.repo = repo;
         this.registry = registry;
@@ -199,8 +199,6 @@ public class RelayClientHandler implements Runnable {
 
     /**
      * Xử lý ACK ngược: receiver đã nhận tin nhắn từ relay, gửi ACK về cho sender.
-     * - Nếu sender đang online → forward ACK trực tiếp qua socket.
-     * - Nếu sender offline → store ACK vào relay_messages để sender fetch sau.
      */
     private void handleRelayAck(Message ackMsg) {
         String targetSenderId = ackMsg.getTargetPeerId();
@@ -251,9 +249,17 @@ public class RelayClientHandler implements Runnable {
         }
     }
 
-    public String getPeerId() { return peerId; }
-    public String getUsername() { return username; }
-    public boolean isRunning() { return running; }
+    public String getPeerId() {
+        return peerId;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public boolean isRunning() {
+        return running;
+    }
 
     private void cleanup() {
         running = false;
@@ -267,7 +273,8 @@ public class RelayClientHandler implements Runnable {
         }
         try {
             socket.close();
-        } catch (IOException ignored) {}
+        } catch (IOException ignored) {
+        }
         if (onDisconnect != null) {
             onDisconnect.run();
         }
@@ -277,11 +284,13 @@ public class RelayClientHandler implements Runnable {
         running = false;
         try {
             socket.close();
-        } catch (IOException ignored) {}
+        } catch (IOException ignored) {
+        }
     }
 
     private String extractIp(String address) {
-        if (address == null) return "";
+        if (address == null)
+            return "";
         String s = address.replaceAll("^/", "").replaceAll("/$", "");
         int colon = s.lastIndexOf(':');
         return colon > 0 ? s.substring(0, colon) : s;

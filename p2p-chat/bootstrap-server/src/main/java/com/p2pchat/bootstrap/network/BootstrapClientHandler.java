@@ -17,8 +17,10 @@ import java.util.logging.Logger;
  * Mỗi kết nối chạy trên thread riêng.
  *
  * Luồng:
- *   1. Peer gửi REGISTER → server lưu DB, trả PEER_LIST, broadcast PEER_JOINED cho others
- *   2. Peer gửi UNREGISTER / mất kết nối → server setOffline DB, broadcast PEER_LEFT
+ * 1. Peer gửi REGISTER → server lưu DB, trả PEER_LIST, broadcast PEER_JOINED
+ * cho others
+ * 2. Peer gửi UNREGISTER / mất kết nối → server setOffline DB, broadcast
+ * PEER_LEFT
  */
 public class BootstrapClientHandler implements Runnable {
 
@@ -27,12 +29,12 @@ public class BootstrapClientHandler implements Runnable {
     private final Socket socket;
     private final UserRepository userRepo;
     private final Consumer<BootstrapClientHandler> onDisconnect;
-    private final Consumer<BootstrapClientHandler> onRegistered;  // ← callback sau REGISTER
+    private final Consumer<BootstrapClientHandler> onRegistered; // ← callback sau REGISTER
 
     // broadcastCallback(message, excludePeerId)
     private final BiConsumer<Message, String> broadcastCallback;
 
-    private ObjectInputStream  in;
+    private ObjectInputStream in;
     private ObjectOutputStream out;
     private volatile boolean running = true;
 
@@ -41,15 +43,15 @@ public class BootstrapClientHandler implements Runnable {
     private String clientIp;
 
     public BootstrapClientHandler(Socket socket,
-                                  UserRepository userRepo,
-                                  Consumer<BootstrapClientHandler> onDisconnect,
-                                  BiConsumer<Message, String> broadcastCallback,
-                                  Consumer<BootstrapClientHandler> onRegistered) {
-        this.socket            = socket;
-        this.userRepo          = userRepo;
-        this.onDisconnect      = onDisconnect;
+            UserRepository userRepo,
+            Consumer<BootstrapClientHandler> onDisconnect,
+            BiConsumer<Message, String> broadcastCallback,
+            Consumer<BootstrapClientHandler> onRegistered) {
+        this.socket = socket;
+        this.userRepo = userRepo;
+        this.onDisconnect = onDisconnect;
         this.broadcastCallback = broadcastCallback;
-        this.onRegistered      = onRegistered;
+        this.onRegistered = onRegistered;
         this.clientIp = socket.getInetAddress().getHostAddress();
     }
 
@@ -59,12 +61,13 @@ public class BootstrapClientHandler implements Runnable {
             // out trước in → tránh deadlock ObjectInputStream
             out = new ObjectOutputStream(socket.getOutputStream());
             out.flush();
-            in  = new ObjectInputStream(socket.getInputStream());
+            in = new ObjectInputStream(socket.getInputStream());
 
             while (running && !socket.isClosed()) {
                 try {
                     Message msg = (Message) in.readObject();
-                    if (msg != null) handleMessage(msg);
+                    if (msg != null)
+                        handleMessage(msg);
                 } catch (ClassNotFoundException e) {
                     log.warning("Unknown class from " + clientIp + ": " + e.getMessage());
                 }
@@ -72,7 +75,8 @@ public class BootstrapClientHandler implements Runnable {
         } catch (EOFException | java.net.SocketException e) {
             log.info("Peer disconnected: " + (peerId != null ? peerId : clientIp));
         } catch (IOException e) {
-            if (running) log.warning("Handler IO error [" + clientIp + "]: " + e.getMessage());
+            if (running)
+                log.warning("Handler IO error [" + clientIp + "]: " + e.getMessage());
         } finally {
             handleDisconnect();
         }
@@ -80,27 +84,21 @@ public class BootstrapClientHandler implements Runnable {
 
     private void handleMessage(Message msg) {
         switch (msg.getType()) {
-            case REGISTER     -> handleRegister(msg);
-            case UNREGISTER   -> handleUnregister(msg);
-            case PEER_JOINED  -> handlePeerJoined(msg);
-            case HEARTBEAT    -> sendMessage(Message.createHeartbeat(msg.getTargetPeerId()));
-            default           -> log.fine("Bootstrap ignores: " + msg.getType());
+            case REGISTER -> handleRegister(msg);
+            case UNREGISTER -> handleUnregister(msg);
+            case PEER_JOINED -> handlePeerJoined(msg);
+            case HEARTBEAT -> sendMessage(Message.createHeartbeat(msg.getTargetPeerId()));
+            default -> log.fine("Bootstrap ignores: " + msg.getType());
         }
     }
 
-    /**
-     * Xử lý PEER_JOINED được forward bởi một peer (thay vì trực tiếp từ peer mới).
-     * Điều này xảy ra khi peer A nhận GET_PEERS từ peer B và gọi notifyPeerJoined(B).
-     * Bootstrap cần broadcast PEER_JOINED cho TẤT CẢ peers khác (kể cả những peer
-     * không kết nối trực tiếp với A), để đảm bảo mọi peer đều biết về B.
-     */
     private void handlePeerJoined(Message msg) {
         PeerInfo peerInfo = (PeerInfo) msg.getMeta("peerInfo");
         if (peerInfo == null) {
-            String ip   = (String) msg.getMeta("ip");
+            String ip = (String) msg.getMeta("ip");
             Object portObj = msg.getMeta("port");
             int port = (portObj instanceof Integer i) ? i
-                    : (portObj instanceof Number  n) ? n.intValue() : 0;
+                    : (portObj instanceof Number n) ? n.intValue() : 0;
             if (ip == null || port == 0) {
                 log.warning("[Bootstrap] PEER_JOINED missing ip/port for: " + msg.getSenderPeerId());
                 return;
@@ -111,8 +109,7 @@ public class BootstrapClientHandler implements Runnable {
         // Cập nhật DB để Bootstrap biết peer này online
         userRepo.registerOrUpdate(peerInfo);
 
-        // Broadcast cho tất cả peers đang kết nối (trừ chính peer mới)
-        // Đây là bước QUAN TRỌNG: đảm bảo C (join qua Bootstrap) nhận được PEER_JOINED(B)
+        // Broadcast cho tất cả peers đang kết nối
         broadcastCallback.accept(msg, peerInfo.getPeerId());
 
         log.info("[Bootstrap] PEER_JOINED relayed for: " + peerInfo.getUsername()
@@ -120,9 +117,9 @@ public class BootstrapClientHandler implements Runnable {
     }
 
     private void handleRegister(Message msg) {
-        this.peerId   = msg.getSenderPeerId();
+        this.peerId = msg.getSenderPeerId();
         this.username = msg.getSenderUsername();
-        int peerPort  = (Integer) msg.getMeta("port");
+        int peerPort = (Integer) msg.getMeta("port");
 
         PeerInfo peerInfo = new PeerInfo(peerId, username, clientIp, peerPort);
 
@@ -139,14 +136,15 @@ public class BootstrapClientHandler implements Runnable {
         sendMessage(response);
 
         // 4. Đăng ký handler vào connectedHandlers TRƯỚC khi broadcast
-        //    để các peer sau cũng nhìn thấy peer này khi họ join
-        if (onRegistered != null) onRegistered.accept(this);
+        // để các peer sau cũng nhìn thấy peer này khi họ join
+        if (onRegistered != null)
+            onRegistered.accept(this);
 
         // 5. Broadcast PEER_JOINED tới tất cả peers đang kết nối (trừ chính peer này)
         Message joinedMsg = new Message(MessageType.PEER_JOINED, peerId, username);
         joinedMsg.setSenderUsername(username);
         joinedMsg.putMeta("peerInfo", peerInfo);
-        joinedMsg.putMeta("ip",   clientIp);
+        joinedMsg.putMeta("ip", clientIp);
         joinedMsg.putMeta("port", peerPort);
         broadcastCallback.accept(joinedMsg, peerId);
 
@@ -171,7 +169,8 @@ public class BootstrapClientHandler implements Runnable {
             broadcastPeerLeft();
         }
         close();
-        if (onDisconnect != null) onDisconnect.accept(this);
+        if (onDisconnect != null)
+            onDisconnect.accept(this);
     }
 
     private void broadcastPeerLeft() {
@@ -196,11 +195,21 @@ public class BootstrapClientHandler implements Runnable {
     public void close() {
         running = false;
         try {
-            if (!socket.isClosed()) socket.close();
-        } catch (IOException ignored) {}
+            if (!socket.isClosed())
+                socket.close();
+        } catch (IOException ignored) {
+        }
     }
 
-    public String getPeerId()   { return peerId; }
-    public String getUsername() { return username; }
-    public boolean isRunning()  { return running && !socket.isClosed(); }
+    public String getPeerId() {
+        return peerId;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public boolean isRunning() {
+        return running && !socket.isClosed();
+    }
 }

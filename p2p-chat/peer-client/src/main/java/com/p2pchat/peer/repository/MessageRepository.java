@@ -20,7 +20,7 @@ public class MessageRepository {
     private static final Logger log = Logger.getLogger(MessageRepository.class.getName());
     private final DatabaseConfig db = DatabaseConfig.getInstance();
 
-    // ─── messages ─────────────────────────────────────────────────────────────
+    // ─── messages
 
     /** Lưu tin nhắn mới (INSERT IGNORE để idempotent) */
     public void saveMessage(ChatMessage msg) {
@@ -93,7 +93,6 @@ public class MessageRepository {
 
     /**
      * Lịch sử chat trực tiếp giữa hai peer.
-     * Dùng index idx_direct → rất nhanh.
      */
     public List<ChatMessage> getDirectHistory(String myPeerId, String otherPeerId, int limit) {
         final String sql = """
@@ -127,7 +126,6 @@ public class MessageRepository {
 
     /**
      * Lịch sử chat nhóm.
-     * Dùng index idx_group → rất nhanh.
      */
     public List<ChatMessage> getGroupHistory(String groupId, int limit) {
         final String sql = """
@@ -153,7 +151,7 @@ public class MessageRepository {
         return result;
     }
 
-    // ─── pending_messages (store-and-forward) ─────────────────────────────────
+    // ─── pending_messages (store-and-forward local)
 
     /** Lưu tin nhắn vào hàng đợi khi peer đích offline */
     public void savePendingMessage(Message msg) {
@@ -181,7 +179,6 @@ public class MessageRepository {
 
     /**
      * Lấy tất cả tin nhắn đang chờ gửi tới một peer (retry_count < 5).
-     * Dùng index idx_pending → nhanh.
      */
     public List<Message> getPendingMessages(String targetPeerId) {
         final String sql = """
@@ -231,7 +228,7 @@ public class MessageRepository {
         }
     }
 
-    // ─── historical peers ──────────────────────────────────────────────────────
+    // ─── historical peers
 
     public List<PeerInfo> getHistoricalPeers(String myPeerId) {
         final String sql = """
@@ -301,7 +298,7 @@ public class MessageRepository {
         return result;
     }
 
-    // ─── helpers ──────────────────────────────────────────────────────────────
+    // ─── helpers
 
     private ChatMessage mapRow(ResultSet rs) throws SQLException {
         ChatMessage cm = new ChatMessage();

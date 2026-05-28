@@ -13,15 +13,7 @@ import java.util.logging.Logger;
 
 /**
  * Thay thế BootstrapClient khi người dùng chọn "Join via Known Peer".
- *
- * Luồng:
- * 1. Kết nối TCP tới peer đã biết (knownPeerHost:knownPeerPort)
- * 2. Gửi GET_PEERS kèm thông tin của mình (peerId, username, myPort)
- * 3. Peer kia trả PEER_LIST = danh sách peers trong knownPeers của nó
- * 4. Peer kia broadcast PEER_JOINED tới các peer của nó (chúng tôi join)
- * 5. Duy trì kết nối để nhận PEER_JOINED/PEER_LEFT events tiếp theo
- * (peer kia đóng vai "mini-bootstrap" cho mình)
- */
+ **/
 
 public class PeerJoinClient implements Runnable {
 
@@ -53,9 +45,6 @@ public class PeerJoinClient implements Runnable {
 
     /**
      * Kết nối tới peer đã biết, gửi GET_PEERS, nhận PEER_LIST.
-     *
-     * @return danh sách peers mà peer kia biết (bao gồm cả chính peer kia)
-     * @throws IOException nếu không kết nối được
      */
     public List<PeerInfo> connectAndGetPeers() throws IOException {
         log.info("[PeerJoin] Connecting to known peer: " + knownPeerHost + ":" + knownPeerPort);

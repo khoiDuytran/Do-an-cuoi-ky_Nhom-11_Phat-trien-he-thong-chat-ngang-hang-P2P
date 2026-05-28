@@ -33,10 +33,10 @@ public class ConnectionHandler implements Runnable {
     @Override
     public void run() {
         try {
-            // QUAN TRỌNG: tạo out trước in để tránh deadlock
+            // tạo out trước in để tránh deadlock
             out = new ObjectOutputStream(socket.getOutputStream());
             out.flush();
-            in  = new ObjectInputStream(socket.getInputStream());
+            in = new ObjectInputStream(socket.getInputStream());
 
             socket.setSoTimeout(0); // blocking read
 
@@ -48,7 +48,8 @@ public class ConnectionHandler implements Runnable {
                             // Trả lời heartbeat ngay lập tức
                             sendMessage(Message.createHeartbeat(msg.getTargetPeerId()));
                         } else {
-                            if (remotePeerId == null) remotePeerId = msg.getSenderPeerId();
+                            if (remotePeerId == null)
+                                remotePeerId = msg.getSenderPeerId();
                             messageHandler.accept(msg);
                         }
                     }
@@ -57,14 +58,16 @@ public class ConnectionHandler implements Runnable {
                 }
             }
         } catch (EOFException | java.net.SocketException e) {
-            log.info("Connection closed from " + (remotePeerId != null ? remotePeerId : socket.getRemoteSocketAddress()));
+            log.info("Connection closed from "
+                    + (remotePeerId != null ? remotePeerId : socket.getRemoteSocketAddress()));
         } catch (IOException e) {
             if (running) {
                 log.warning("ConnectionHandler IO error: " + e.getMessage());
             }
         } finally {
             close();
-            if (onDisconnect != null) onDisconnect.run();
+            if (onDisconnect != null)
+                onDisconnect.run();
         }
     }
 
@@ -87,14 +90,23 @@ public class ConnectionHandler implements Runnable {
             if (socket != null && !socket.isClosed()) {
                 socket.close();
             }
-        } catch (IOException ignored) {}
+        } catch (IOException ignored) {
+        }
     }
 
     public boolean isConnected() {
         return running && socket != null && socket.isConnected() && !socket.isClosed();
     }
 
-    public String getRemotePeerId() { return remotePeerId; }
-    public void setRemotePeerId(String remotePeerId) { this.remotePeerId = remotePeerId; }
-    public String getRemoteAddress() { return socket.getRemoteSocketAddress().toString(); }
+    public String getRemotePeerId() {
+        return remotePeerId;
+    }
+
+    public void setRemotePeerId(String remotePeerId) {
+        this.remotePeerId = remotePeerId;
+    }
+
+    public String getRemoteAddress() {
+        return socket.getRemoteSocketAddress().toString();
+    }
 }

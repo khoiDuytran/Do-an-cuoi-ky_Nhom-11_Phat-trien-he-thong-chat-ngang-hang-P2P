@@ -24,9 +24,6 @@ public class BootstrapClient implements Runnable {
     private static final int RECONNECT_BASE_DELAY_MS = 3_000;
     private static final int MAX_RECONNECT_ATTEMPTS = 3;
 
-    // Guard: only fire onStatusChange when state *changes*.
-    // Prevents duplicate CONNECTED events when reconnect() succeeds after
-    // multiple DISCONNECTED notifications are still queued on the EDT.
     private BootstrapStatus lastEmittedStatus = null;
 
     private final String bootstrapHost;
@@ -59,7 +56,7 @@ public class BootstrapClient implements Runnable {
      * Kết nối và đăng ký với bootstrap server.
      * Tạo socket mới, ghi đè socket cũ (socket cũ đã được close trước khi gọi).
      * 
-     * @return danh sách peers hiện tại, hoặc empty list nếu lỗi
+     * return danh sách peers hiện tại, hoặc empty list nếu lỗi
      */
     public List<PeerInfo> connectAndRegister() throws IOException {
         // Ensure old resources are cleaned up
@@ -158,10 +155,6 @@ public class BootstrapClient implements Runnable {
         }
     }
 
-    /**
-     * Vòng reconnect với exponential backoff + jitter.
-     * Sau mỗi lần thử thành công: khôi phục socket/in/running và quay về run().
-     */
     void reconnect() {
         // Đóng socket cũ trước khi tạo socket mới để tránh leak.
         // Set running=true để vòng while chạy — cần thiết khi gọi trực tiếp từ test.
@@ -270,7 +263,7 @@ public class BootstrapClient implements Runnable {
             Message msg = new Message(MessageType.PEER_JOINED, newPeer.getPeerId(), newPeer.getUsername());
             msg.setSenderUsername(newPeer.getUsername());
             msg.putMeta("peerInfo", newPeer);
-            msg.putMeta("ip",   newPeer.getIpAddress());
+            msg.putMeta("ip", newPeer.getIpAddress());
             msg.putMeta("port", newPeer.getPort());
             sendMessage(msg);
             log.info("[BootstrapClient] Notified PEER_JOINED for: " + newPeer.getUsername());

@@ -364,9 +364,6 @@ public class ChatBubblePanel extends JPanel {
             bubble.add(senderLabel, BorderLayout.NORTH);
         }
 
-        // Message text — dùng JLabel HTML.
-        // Chỉ ép width trong HTML khi text đủ dài để cần wrap (> MAX_BUBBLE_WIDTH),
-        // còn không thì để JLabel tự co theo nội dung (bubble ngắn với tin ngắn).
         final int padding = 40; // border + insets của bubble
         FontMetrics fm = getFontMetrics(new Font("SansSerif", Font.PLAIN, 14));
         int naturalWidth = 0;
@@ -415,11 +412,8 @@ public class ChatBubblePanel extends JPanel {
 
         bubble.add(bottomRow, BorderLayout.SOUTH);
 
-        // JLabel HTML đã biết width (set trong style), nên getPreferredSize() trả về
-        // đúng cả width lẫn height. Chỉ cần cap width tối đa, height tự nhiên.
         bubble.setMaximumSize(new Dimension(MAX_BUBBLE_WIDTH, Integer.MAX_VALUE));
 
-        // Align left or right
         JPanel row = new JPanel(new FlowLayout(isOwn ? FlowLayout.RIGHT : FlowLayout.LEFT, 8, 2));
         row.setOpaque(false);
         row.add(bubble);
@@ -456,14 +450,17 @@ public class ChatBubblePanel extends JPanel {
      * Phải gọi trên EDT.
      */
     public void markDelivered() {
-        if (statusLabel == null || isDelivered) return;
+        if (statusLabel == null || isDelivered)
+            return;
         isDelivered = true;
         statusLabel.setText("✓✓");
         statusLabel.setForeground(new Color(180, 255, 180));
         statusLabel.repaint();
     }
 
-    public String getMessageId() { return messageId; }
+    public String getMessageId() {
+        return messageId;
+    }
 
     private int calculateWidth(String text, String timeStr) {
         FontMetrics fmText = getFontMetrics(new Font("SansSerif", Font.PLAIN, 14));

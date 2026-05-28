@@ -12,20 +12,18 @@ import java.util.List;
 
 /**
  * Cấu hình mạng relay: IP LAN dùng để peers trên máy khác biết kết nối tới đâu.
- * <p>
- * Server vẫn lắng nghe trên mọi interface ({@code 0.0.0.0}); giá trị quảng bá chỉ để
- * in log / hướng dẫn — không ép bind socket theo IP này.
  */
 public final class RelayNetworkConfig {
 
     /** Cổng TCP peer kết nối tới (trùng tham số dòng lệnh khi chạy jar). */
     public static final int DEFAULT_LISTEN_PORT = 9100;
 
-    private RelayNetworkConfig() {}
+    private RelayNetworkConfig() {
+    }
 
     /**
      * IPv4 LAN của máy đang chạy relay-server (ưu tiên địa chỉ private RFC1918).
-     * Nếu không tìm thấy, thử {@link InetAddress#getLocalHost()} rồi {@code 127.0.0.1}.
+     * Nếu không tìm thấy, thử {InetAddress#getLocalHost()} rồi {127.0.0.1}.
      */
     public static String getAdvertisedLanHost() {
         List<Inet4Address> found = new ArrayList<>();

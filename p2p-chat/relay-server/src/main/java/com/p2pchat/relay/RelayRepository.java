@@ -20,23 +20,21 @@ public class RelayRepository {
     // Thời gian hết hạn mặc định: 7 ngày
     public static final int MESSAGE_EXPIRY_DAYS = 7;
 
-    // ─── Registered Peers ───────────────────────────────────────────────────────
-
     /**
      * Đăng ký peer đang online với relay server.
      */
     public void registerPeer(String peerId, String username, String ipAddress, int port) {
         final String sql = """
-            INSERT INTO registered_peers (peer_id, username, ip_address, port, last_seen)
-            VALUES (?, ?, ?, ?, NOW())
-            ON DUPLICATE KEY UPDATE
-                username = VALUES(username),
-                ip_address = VALUES(ip_address),
-                port = VALUES(port),
-                last_seen = NOW()
-            """;
+                INSERT INTO registered_peers (peer_id, username, ip_address, port, last_seen)
+                VALUES (?, ?, ?, ?, NOW())
+                ON DUPLICATE KEY UPDATE
+                    username = VALUES(username),
+                    ip_address = VALUES(ip_address),
+                    port = VALUES(port),
+                    last_seen = NOW()
+                """;
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, peerId);
             ps.setString(2, username);
             ps.setString(3, ipAddress);
@@ -54,7 +52,7 @@ public class RelayRepository {
     public void unregisterPeer(String peerId) {
         final String sql = "DELETE FROM registered_peers WHERE peer_id = ?";
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, peerId);
             ps.executeUpdate();
             log.info("[RelayRepo] Unregistered peer: " + peerId);
@@ -69,7 +67,7 @@ public class RelayRepository {
     public void updatePeerLastSeen(String peerId) {
         final String sql = "UPDATE registered_peers SET last_seen = NOW() WHERE peer_id = ?";
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, peerId);
             ps.executeUpdate();
         } catch (SQLException e) {
@@ -83,7 +81,7 @@ public class RelayRepository {
     public boolean isPeerOnline(String peerId) {
         final String sql = "SELECT 1 FROM registered_peers WHERE peer_id = ? AND last_seen > DATE_SUB(NOW(), INTERVAL 30 SECOND)";
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, peerId);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next();
@@ -100,7 +98,7 @@ public class RelayRepository {
     public PeerInfo getPeerInfo(String peerId) {
         final String sql = "SELECT * FROM registered_peers WHERE peer_id = ?";
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, peerId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -108,8 +106,7 @@ public class RelayRepository {
                             rs.getString("peer_id"),
                             rs.getString("username"),
                             rs.getString("ip_address"),
-                            rs.getInt("port")
-                    );
+                            rs.getInt("port"));
                 }
             }
         } catch (SQLException e) {
@@ -118,21 +115,19 @@ public class RelayRepository {
         return null;
     }
 
-    // ─── Relay Messages ───────────────────────────────────────────────────────
-
     /**
      * Lưu tin nhắn offline vào relay server.
      */
     public void storeMessage(Message msg, String targetPeerId) {
         final String sql = """
-            INSERT INTO relay_messages
-                (message_id, sender_peer_id, sender_username, target_peer_id,
-                 content, type, group_id, timestamp, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE message_id = message_id
-            """;
+                INSERT INTO relay_messages
+                    (message_id, sender_peer_id, sender_username, target_peer_id,
+                     content, type, group_id, timestamp, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE message_id = message_id
+                """;
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, msg.getMessageId());
             ps.setString(2, msg.getSenderPeerId());
@@ -164,13 +159,13 @@ public class RelayRepository {
      */
     public List<StoredMessage> fetchPendingMessages(String targetPeerId) {
         final String sql = """
-            SELECT * FROM relay_messages
-            WHERE target_peer_id = ? AND delivered = 0 AND expires_at > NOW()
-            ORDER BY timestamp ASC
-            """;
+                SELECT * FROM relay_messages
+                WHERE target_peer_id = ? AND delivered = 0 AND expires_at > NOW()
+                ORDER BY timestamp ASC
+                """;
         List<StoredMessage> result = new ArrayList<>();
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
 
             ps.setString(1, targetPeerId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -191,7 +186,7 @@ public class RelayRepository {
     public void markDelivered(String messageId) {
         final String sql = "UPDATE relay_messages SET delivered = 1 WHERE message_id = ?";
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, messageId);
             ps.executeUpdate();
             log.info("[RelayRepo] Marked delivered: " + messageId);
@@ -206,7 +201,7 @@ public class RelayRepository {
     public void deleteMessage(String messageId) {
         final String sql = "DELETE FROM relay_messages WHERE message_id = ?";
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, messageId);
             ps.executeUpdate();
             log.info("[RelayRepo] Deleted message: " + messageId);
@@ -220,11 +215,11 @@ public class RelayRepository {
      */
     public int getPendingCount(String targetPeerId) {
         final String sql = """
-            SELECT COUNT(*) FROM relay_messages
-            WHERE target_peer_id = ? AND delivered = 0 AND expires_at > NOW()
-            """;
+                SELECT COUNT(*) FROM relay_messages
+                WHERE target_peer_id = ? AND delivered = 0 AND expires_at > NOW()
+                """;
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, targetPeerId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -237,15 +232,13 @@ public class RelayRepository {
         return 0;
     }
 
-    // ─── Cleanup ───────────────────────────────────────────────────────────────
-
     /**
      * Xóa tin nhắn đã hết hạn.
      */
     public int cleanupExpiredMessages() {
         final String sql = "DELETE FROM relay_messages WHERE expires_at <= NOW() OR delivered = 1";
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             int deleted = ps.executeUpdate();
             if (deleted > 0) {
                 log.info("[RelayRepo] Cleaned up " + deleted + " expired/delivered messages");
@@ -263,7 +256,7 @@ public class RelayRepository {
     public int cleanupInactivePeers() {
         final String sql = "DELETE FROM registered_peers WHERE last_seen < DATE_SUB(NOW(), INTERVAL 60 SECOND)";
         try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
+                PreparedStatement ps = conn.prepareStatement(sql)) {
             int deleted = ps.executeUpdate();
             if (deleted > 0) {
                 log.info("[RelayRepo] Cleaned up " + deleted + " inactive peers");
@@ -274,8 +267,6 @@ public class RelayRepository {
             return 0;
         }
     }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private StoredMessage mapRowToStoredMessage(ResultSet rs) throws SQLException {
         StoredMessage sm = new StoredMessage();
@@ -306,7 +297,8 @@ public class RelayRepository {
         public String groupId;
         public LocalDateTime timestamp;
 
-        public StoredMessage() {}
+        public StoredMessage() {
+        }
 
         public Message toMessage() {
             Message msg = new Message();

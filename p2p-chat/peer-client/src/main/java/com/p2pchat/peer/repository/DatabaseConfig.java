@@ -10,10 +10,6 @@ import java.util.logging.Logger;
 /**
  * Quản lý Connection Pool MySQL cho Peer local (DB2).
  * Mỗi peer kết nối vào database riêng: p2pchat_peer_{peerId_short}
- *
- * Schema DB2 (peer local):
- * - messages : lịch sử tin nhắn gửi/nhận
- * - pending_messages : hàng đợi store-and-forward
  */
 public class DatabaseConfig {
 
@@ -40,7 +36,6 @@ public class DatabaseConfig {
 
     /**
      * Khởi tạo pool kết nối MySQL cho peer.
-     * Database sẽ có tên: p2pchat_peer_{8 ký tự đầu của peerId}
      */
     public void initialize(String peerId, String host, int port,
             String username, String password) throws SQLException {

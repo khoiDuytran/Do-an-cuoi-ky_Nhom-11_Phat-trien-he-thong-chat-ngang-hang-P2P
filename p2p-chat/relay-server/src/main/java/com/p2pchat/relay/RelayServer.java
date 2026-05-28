@@ -142,8 +142,6 @@ public class RelayServer {
         return registry.getOnlineCount();
     }
 
-    // ─── main entry point ──────────────────────────────────────────────────────
-
     public static void main(String[] args) {
         // Đọc cấu hình từ args hoặc dùng mặc định
         int port = args.length > 0 ? Integer.parseInt(args[0]) : 9100;

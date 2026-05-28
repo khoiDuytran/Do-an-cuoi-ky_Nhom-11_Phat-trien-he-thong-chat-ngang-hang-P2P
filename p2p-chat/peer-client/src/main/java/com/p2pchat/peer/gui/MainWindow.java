@@ -22,7 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MainWindow extends JFrame {
 
-    // ── Bảng màu Light theme ─────────────────────────────────────────────────
     // Sidebar
     private static final Color SB_BG = new Color(248, 249, 252); // nền sidebar
     private static final Color SB_HEADER_BG = new Color(255, 255, 255); // header trắng
@@ -49,7 +48,6 @@ public class MainWindow extends JFrame {
     private static final Color ACCENT = new Color(37, 99, 235);
     private static final Color ACCENT_HOVER = new Color(29, 78, 216);
 
-    // ── State ─────────────────────────────────────────────────────────────────
     private final P2PNode node;
     private final int preferredPort;
     private final JPanel chatArea;
@@ -80,7 +78,6 @@ public class MainWindow extends JFrame {
     private volatile boolean networkStarted = false;
     private volatile boolean bootstrapConnected = false;
 
-    // ── Constructor ───────────────────────────────────────────────────────────
     public MainWindow(P2PNode node, int preferredPort) {
         super("P2P Chat  —  " + node.getUsername());
         this.node = node;
@@ -100,9 +97,7 @@ public class MainWindow extends JFrame {
         });
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
     // BUILD UI
-    // ═════════════════════════════════════════════════════════════════════════
 
     private void buildUI() {
         setSize(1100, 740);
@@ -151,7 +146,6 @@ public class MainWindow extends JFrame {
         return sb;
     }
 
-    // ── Me header ─────────────────────────────────────────────────────────────
     private JPanel buildMeHeader() {
         JPanel panel = new JPanel(new BorderLayout(12, 0));
         panel.setBackground(SB_HEADER_BG);
@@ -190,7 +184,6 @@ public class MainWindow extends JFrame {
         return panel;
     }
 
-    // ── Tab bar ───────────────────────────────────────────────────────────────
     private JPanel buildTabBar() {
         JPanel bar = new JPanel(new GridLayout(1, 2, 0, 0));
         bar.setBackground(TAB_BG);
@@ -248,7 +241,6 @@ public class MainWindow extends JFrame {
         tabGroupsBtn.repaint();
     }
 
-    // ── Peers panel ───────────────────────────────────────────────────────────
     private JPanel buildPeersPanel() {
         connectBtn = makeRoundButton("Connect", ACCENT, ACCENT_HOVER);
         connectBtn.setPreferredSize(new Dimension(110, 26));
@@ -318,7 +310,6 @@ public class MainWindow extends JFrame {
         return panel;
     }
 
-    // ── Groups panel ──────────────────────────────────────────────────────────
     private JPanel buildGroupsPanel() {
         // Section header + nút "New Group"
         JButton addBtn = makeRoundButton("+ New Group", ACCENT, ACCENT_HOVER);
@@ -386,7 +377,6 @@ public class MainWindow extends JFrame {
         return panel;
     }
 
-    // ── Status bar ────────────────────────────────────────────────────────────
     private JPanel buildStatusBar() {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(STATUS_BG);
@@ -422,7 +412,6 @@ public class MainWindow extends JFrame {
         return bar;
     }
 
-    // ── Welcome panel ─────────────────────────────────────────────────────────
     private JPanel buildWelcomePanel() {
         JPanel outer = new JPanel(new GridBagLayout());
         outer.setBackground(new Color(249, 250, 251));
@@ -490,9 +479,7 @@ public class MainWindow extends JFrame {
         return outer;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
     // HISTORICAL PEERS (load từ DB local)
-    // ═════════════════════════════════════════════════════════════════════════
 
     private void loadHistoricalPeers() {
         SwingWorker<java.util.List<PeerInfo>, Void> worker = new SwingWorker<java.util.List<PeerInfo>, Void>() {
@@ -529,9 +516,7 @@ public class MainWindow extends JFrame {
         worker.execute();
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
     // CALLBACKS & AUTO-REFRESH
-    // ═════════════════════════════════════════════════════════════════════════
 
     private void registerCallbacks() {
         node.setOnMessageReceived(this::onMessageReceived);
@@ -628,21 +613,12 @@ public class MainWindow extends JFrame {
         statusLabel.setText("  You left the group.");
     }
 
-    /**
-     * Auto-refresh danh sách peer mỗi 1.5s từ node.getKnownPeers().
-     * Đảm bảo UI luôn phản ánh đúng trạng thái mạng dù callback bị miss.
-     */
-    /**
-     * Refresh thủ công: đọc thẳng từ node.getKnownPeers() và node.getGroups()
-     * rồi cập nhật model trên EDT.
-     */
     private void doRefresh() {
         // Hiệu ứng spin trên nút
         setRefreshButtonsEnabled(false);
         setRefreshButtonsText("...");
 
         SwingUtilities.invokeLater(() -> {
-            // ── Sync peers ───────────────────────────────────────────────
             for (PeerInfo peer : node.getKnownPeers().values()) {
                 if (!peer.getPeerId().equals(node.getPeerId())) {
                     upsertPeer(peer);
@@ -651,7 +627,6 @@ public class MainWindow extends JFrame {
             onlineCountLabel.setText(countOnline() + " online");
             peerList.repaint();
 
-            // ── Sync groups ──────────────────────────────────────────────
             Set<String> nodeGroupIds = new HashSet<>();
             for (ChatGroup g : node.getGroups().values()) {
                 nodeGroupIds.add(g.getGroupId());
@@ -894,9 +869,7 @@ public class MainWindow extends JFrame {
         });
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
     // NAVIGATION
-    // ═════════════════════════════════════════════════════════════════════════
 
     public void openDirectChat(PeerInfo peer) {
         openChatPanel(peer.getPeerId(), peer.getUsername(), false);
@@ -963,9 +936,7 @@ public class MainWindow extends JFrame {
         SwingUtilities.invokeLater(() -> upsertGroup(g));
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
     // CELL RENDERERS
-    // ═════════════════════════════════════════════════════════════════════════
 
     private class PeerCellRenderer implements ListCellRenderer<PeerInfo> {
         @Override
@@ -1081,9 +1052,7 @@ public class MainWindow extends JFrame {
         }
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
     // HELPERS: custom components
-    // ═════════════════════════════════════════════════════════════════════════
 
     /** Avatar tròn vẽ tay với màu nền và chữ viết tắt */
     private JPanel buildAvatarPanel(String name, int size, Color bgColor) {
@@ -1246,9 +1215,7 @@ public class MainWindow extends JFrame {
         return btn;
     }
 
-    // ═════════════════════════════════════════════════════════════════════════
     // MODEL HELPERS
-    // ═════════════════════════════════════════════════════════════════════════
 
     private void upsertPeer(PeerInfo peer) {
         for (int i = 0; i < peerModel.size(); i++) {

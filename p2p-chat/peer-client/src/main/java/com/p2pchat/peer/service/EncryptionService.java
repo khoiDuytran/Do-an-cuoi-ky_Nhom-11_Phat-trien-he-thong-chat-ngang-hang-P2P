@@ -8,8 +8,6 @@ import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Dịch vụ mã hóa tin nhắn sử dụng AES-128.
- * Key được chia sẻ giữa tất cả peers (pre-shared key).
- * Trong production, nên dùng key exchange (Diffie-Hellman).
  */
 public class EncryptionService {
 
@@ -18,7 +16,6 @@ public class EncryptionService {
     private static final String TRANSFORMATION = "AES/ECB/PKCS5Padding";
 
     // Pre-shared key 16 bytes (AES-128)
-    // Trong thực tế nên dùng key exchange protocol
     private static final byte[] SHARED_KEY = "P2PChatSecretKey".getBytes(StandardCharsets.UTF_8);
 
     private final SecretKeySpec keySpec;
@@ -29,7 +26,8 @@ public class EncryptionService {
     }
 
     public String encrypt(String plainText) {
-        if (!enabled || plainText == null) return plainText;
+        if (!enabled || plainText == null)
+            return plainText;
         try {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
             cipher.init(Cipher.ENCRYPT_MODE, keySpec);
@@ -42,7 +40,8 @@ public class EncryptionService {
     }
 
     public String decrypt(String cipherText) {
-        if (!enabled || cipherText == null) return cipherText;
+        if (!enabled || cipherText == null)
+            return cipherText;
         try {
             byte[] decoded = Base64.getDecoder().decode(cipherText);
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);
@@ -55,6 +54,11 @@ public class EncryptionService {
         }
     }
 
-    public void setEnabled(boolean enabled) { this.enabled = enabled; }
-    public boolean isEnabled() { return enabled; }
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return enabled;
+    }
 }

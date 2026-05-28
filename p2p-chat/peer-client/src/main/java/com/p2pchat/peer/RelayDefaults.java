@@ -6,8 +6,9 @@ package com.p2pchat.peer;
  */
 public final class RelayDefaults {
 
-    public static final String HOST = "172.23.160.1";
+    public static final String HOST = "10.234.131.46";
     public static final int PORT = 9100;
 
-    private RelayDefaults() {}
+    private RelayDefaults() {
+    }
 }

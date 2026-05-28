@@ -31,7 +31,7 @@ public class P2PNode {
 
     private static final Logger log = Logger.getLogger(P2PNode.class.getName());
     private static final int HEARTBEAT_INTERVAL_MS = 15_000;
-    private static final int CONNECTION_TIMEOUT_MS  = 5_000;
+    private static final int CONNECTION_TIMEOUT_MS = 5_000;
     private static final int FILE_CHUNK_BYTES = 64 * 1024;
     private static final long MAX_FILE_TRANSFER_BYTES = 50L * 1024 * 1024;
     private static final long GROUP_MAX_FILE_BYTES = 20L * 1024 * 1024; // 20MB
@@ -41,32 +41,27 @@ public class P2PNode {
     private final String username;
     private int listeningPort;
 
-    // Bootstrap info (saved so join-via-peer mode can still notify Bootstrap)
+    // Bootstrap info (dùng để reconnect hoặc join via peer)
     private String bootstrapHost;
     private int bootstrapPort;
 
     // Network
-    private PeerServer     peerServer;
+    private PeerServer peerServer;
     private BootstrapClient bootstrapClient;
-    private PeerJoinClient  peerJoinClient;   // ← dùng khi join via peer
-    private RelayClient    relayClient;       // ← kết nối relay server cho offline messaging
+    private PeerJoinClient peerJoinClient; // dùng khi join via peer
+    private RelayClient relayClient; // kết nối relay server cho offline messaging
     private Thread serverThread;
     private Thread bootstrapThread;
 
-    // Connected peers: peerId -> ConnectionHandler
     private final ConcurrentHashMap<String, ConnectionHandler> connections = new ConcurrentHashMap<>();
 
-    // Known peers (from bootstrap): peerId -> PeerInfo
     private final ConcurrentHashMap<String, PeerInfo> knownPeers = new ConcurrentHashMap<>();
 
-    // Groups: groupId -> ChatGroup
     private final ConcurrentHashMap<String, ChatGroup> groups = new ConcurrentHashMap<>();
 
-    // Repository
     private final MessageRepository messageRepo;
-    private final GroupRepository   groupRepo;
+    private final GroupRepository groupRepo;
 
-    // Encryption
     private final EncryptionService encryptionService;
 
     // UI callbacks
@@ -74,17 +69,11 @@ public class P2PNode {
     private Consumer<String> onAckReceived; // messageId → notify GUI update tick
     private BiConsumer<PeerInfo, Boolean> onPeerStatusChanged; // PeerInfo, isOnline
     private Consumer<String> onSystemEvent;
-    /** (group, systemLine) — line shown as system message in that group's chat if the panel is open */
     private BiConsumer<ChatGroup, String> onGroupSync;
-    /** groupId — this peer left the group; remove from sidebar / close panel */
     private Consumer<String> onLocalGroupLeft;
-    /** Tin FILE / artifact đã lưu DB — UI thêm bubble (không đi qua luồng Message CHAT). */
     private Consumer<ChatMessage> onChatArtifact;
-    /** Bootstrap server connection state — re-emitted to UI. */
     private java.util.function.Consumer<BootstrapStatus> onBootstrapStatus;
-    /** Relay server connection state — re-emitted to UI. */
     private java.util.function.Consumer<RelayClient.RelayConnectionStatus> onRelayStatus;
-    /** Số tin nhắn offline đang chờ */
     private int pendingOfflineCount = 0;
     private java.util.function.Consumer<Integer> onPendingCountChanged;
 
@@ -107,11 +96,9 @@ public class P2PNode {
         this.peerId = peerId;
         this.username = username;
         this.messageRepo = new MessageRepository();
-        this.groupRepo   = new GroupRepository();
+        this.groupRepo = new GroupRepository();
         this.encryptionService = new EncryptionService();
     }
-
-    // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
     /** Backward-compat: join qua Bootstrap Server */
     public void start(String bootstrapHost, int bootstrapPort, int preferredPort) throws Exception {
@@ -134,13 +121,12 @@ public class P2PNode {
 
         // 2. Kết nối Bootstrap
         if (bootstrapClient != null) {
-            bootstrapClient.stopReconnectLoop(); // stop old reconnect loop before replacing
+            bootstrapClient.stopReconnectLoop();
         }
         bootstrapClient = new BootstrapClient(
                 bootstrapHost, bootstrapPort,
                 peerId, username, listeningPort,
-                this::handleBootstrapEvent
-        );
+                this::handleBootstrapEvent);
         bootstrapClient.setOnStatusChange(this::forwardBootstrapStatus);
         List<PeerInfo> existingPeers = bootstrapClient.connectAndRegister();
 
@@ -177,7 +163,7 @@ public class P2PNode {
         peerJoinClient = new PeerJoinClient(
                 knownPeerHost, knownPeerPort,
                 peerId, username, listeningPort,
-                this::handleBootstrapEvent   // reuse same handler
+                this::handleBootstrapEvent // reuse same handler
         );
         List<PeerInfo> existingPeers = peerJoinClient.connectAndGetPeers();
 
@@ -202,7 +188,7 @@ public class P2PNode {
 
     private void startPeerServer() {
         peerServer = new PeerServer(listeningPort,
-                this::handleIncomingMessage,      // BiConsumer<Message, ConnectionHandler>
+                this::handleIncomingMessage, // BiConsumer<Message, ConnectionHandler>
                 this::registerIncomingConnection);
         serverThread = new Thread(peerServer, "peer-server");
         serverThread.setDaemon(true);
@@ -245,10 +231,14 @@ public class P2PNode {
         connections.values().forEach(ConnectionHandler::close);
         connections.clear();
 
-        if (bootstrapClient != null) bootstrapClient.disconnect();
-        if (peerJoinClient != null) peerJoinClient.disconnect();
-        if (relayClient != null) relayClient.disconnect();
-        if (peerServer != null) peerServer.stop();
+        if (bootstrapClient != null)
+            bootstrapClient.disconnect();
+        if (peerJoinClient != null)
+            peerJoinClient.disconnect();
+        if (relayClient != null)
+            relayClient.disconnect();
+        if (peerServer != null)
+            peerServer.stop();
         receivedFilePayloads.clear();
     }
 
@@ -256,7 +246,7 @@ public class P2PNode {
 
     /**
      * Gửi tin nhắn trực tiếp tới một peer.
-     * @return messageId dùng cho UI / ACK (cùng id với bản ghi DB)
+     * return messageId dùng cho UI / ACK (cùng id với bản ghi DB)
      */
     public String sendDirectMessage(String targetPeerId, String content) {
         Message msg = Message.createChat(peerId, username, targetPeerId, encryptionService.encrypt(content));
@@ -274,8 +264,7 @@ public class P2PNode {
             // Peer offline - gửi qua relay server
             sendViaRelay(msg);
             // Đảm bảo DB phản ánh đúng: tin đang chờ relay, chưa delivered
-            // (saveMessage() ở trên đã lưu với delivered=false nhờ fix ChatMessage.fromDirect,
-            //  nhưng gọi thêm để chắc chắn trong mọi trường hợp race condition)
+            // nhưng gọi thêm để chắc chắn trong mọi trường hợp race condition)
             messageRepo.markUndelivered(msg.getMessageId());
             log.info("Peer offline. Message sent via relay for: " + targetPeerId);
             notifySystem("⚠ " + getPeerUsername(targetPeerId) + " is offline. Message stored on relay server.");
@@ -286,7 +275,7 @@ public class P2PNode {
     /**
      * Gửi tin nhắn nhóm tới tất cả members.
      * Dùng memberPeerIds làm primary list, connections map làm fallback.
-     * @return messageId dùng cho UI / DB
+     * return messageId dùng cho UI / DB
      */
     public String sendGroupMessage(String groupId, String content) {
         ChatGroup group = groups.get(groupId);
@@ -302,12 +291,12 @@ public class P2PNode {
         messageRepo.saveMessage(cm);
 
         // Tập hợp targets: tất cả members trong group + tất cả connections đang có
-        // (để đảm bảo không bỏ sót ai dù member list chưa sync đầy đủ)
         Set<String> targets = new java.util.LinkedHashSet<>(group.getMemberPeerIds());
 
         int sent = 0;
         for (String memberId : targets) {
-            if (memberId.equals(peerId)) continue; // không gửi cho mình
+            if (memberId.equals(peerId))
+                continue; // không gửi cho mình
             ConnectionHandler conn = connections.get(memberId);
             if (conn != null && conn.isConnected()) {
                 conn.sendMessage(msg);
@@ -339,11 +328,10 @@ public class P2PNode {
 
     private void broadcastToAllPeers(Message msg) {
         connections.values().forEach(conn -> {
-            if (conn.isConnected()) conn.sendMessage(msg);
+            if (conn.isConnected())
+                conn.sendMessage(msg);
         });
     }
-
-    // ─── Incoming Message Handling ─────────────────────────────────────────────
 
     /** BiConsumer - PeerServer truyền cả message lẫn connection handler */
     private void handleIncomingMessage(Message msg, ConnectionHandler sourceHandler) {
@@ -363,26 +351,26 @@ public class P2PNode {
         }
 
         switch (msg.getType()) {
-            case CHAT        -> handleDirectChat(msg);
-            case GROUP_CHAT  -> handleGroupChat(msg);
-            case BROADCAST   -> handleBroadcast(msg);
-            case ACK         -> handleAck(msg);
+            case CHAT -> handleDirectChat(msg);
+            case GROUP_CHAT -> handleGroupChat(msg);
+            case BROADCAST -> handleBroadcast(msg);
+            case ACK -> handleAck(msg);
             case PEER_JOINED -> handlePeerJoined(msg);
-            case PEER_LEFT   -> handlePeerLeft(msg);
+            case PEER_LEFT -> handlePeerLeft(msg);
             case CREATE_GROUP -> handleCreateGroup(msg);
-            case JOIN_GROUP  -> handleJoinGroup(msg);
+            case JOIN_GROUP -> handleJoinGroup(msg);
             case LEAVE_GROUP -> handleLeaveGroup(msg);
-            case GROUP_INFO  -> handleGroupInfo(msg);
-            case PING        -> handlePing(msg);
-            case GET_PEERS   -> handleGetPeers(msg, sourceHandler); // truyền handler trực tiếp
-            case FILE_TRANSFER_REQUEST  -> handleFileTransferRequest(msg);
-            case FILE_CHUNK             -> handleFileChunk(msg);
+            case GROUP_INFO -> handleGroupInfo(msg);
+            case PING -> handlePing(msg);
+            case GET_PEERS -> handleGetPeers(msg, sourceHandler); // truyền handler trực tiếp
+            case FILE_TRANSFER_REQUEST -> handleFileTransferRequest(msg);
+            case FILE_CHUNK -> handleFileChunk(msg);
             case FILE_TRANSFER_COMPLETE -> handleFileTransferComplete(msg);
-            case FILE_TRANSFER_REJECT   -> handleFileTransferReject(msg);
-            case GROUP_FILE_REQUEST  -> handleGroupFileRequest(msg);
-            case GROUP_FILE_CHUNK    -> handleGroupFileChunk(msg);
+            case FILE_TRANSFER_REJECT -> handleFileTransferReject(msg);
+            case GROUP_FILE_REQUEST -> handleGroupFileRequest(msg);
+            case GROUP_FILE_CHUNK -> handleGroupFileChunk(msg);
             case GROUP_FILE_COMPLETE -> handleGroupFileComplete(msg);
-            default          -> log.fine("Unhandled: " + msg.getType());
+            default -> log.fine("Unhandled: " + msg.getType());
         }
     }
 
@@ -394,8 +382,7 @@ public class P2PNode {
         // Lưu vào DB
         ChatMessage cm = ChatMessage.fromDirect(
                 msg.getMessageId(), msg.getSenderPeerId(),
-                msg.getSenderUsername(), peerId, decrypted, false
-        );
+                msg.getSenderUsername(), peerId, decrypted, false);
         messageRepo.saveMessage(cm);
 
         // Gửi ACK
@@ -405,7 +392,8 @@ public class P2PNode {
         }
 
         // Notify UI
-        if (onMessageReceived != null) onMessageReceived.accept(msg);
+        if (onMessageReceived != null)
+            onMessageReceived.accept(msg);
     }
 
     private void handleGroupChat(Message msg) {
@@ -415,13 +403,10 @@ public class P2PNode {
         // Lưu DB
         ChatMessage cm = ChatMessage.fromGroup(
                 msg.getMessageId(), msg.getSenderPeerId(),
-                msg.getSenderUsername(), msg.getGroupId(), decrypted, false
-        );
+                msg.getSenderUsername(), msg.getGroupId(), decrypted, false);
         messageRepo.saveMessage(cm);
 
         // Relay tới các members khác trong group mà mình đang kết nối
-        // (cần thiết khi topology không phải full-mesh — VD: ngocduc chỉ kết nối qua khoi,
-        //  khoi cần relay message của ngocduc tới dang và ngược lại)
         ChatGroup group = groups.get(msg.getGroupId());
         if (group != null) {
             // Dùng messageId để chống relay vòng lặp: lưu đã relay rồi
@@ -429,7 +414,6 @@ public class P2PNode {
             if (msg.getMeta(relayKey) == null) {
                 msg.putMeta(relayKey, true); // đánh dấu đã relay
                 for (String memberId : group.getMemberPeerIds()) {
-                    // Không gửi lại cho sender và không gửi cho chính mình
                     if (!memberId.equals(msg.getSenderPeerId()) && !memberId.equals(peerId)) {
                         ConnectionHandler conn = connections.get(memberId);
                         if (conn != null && conn.isConnected()) {
@@ -443,7 +427,8 @@ public class P2PNode {
         }
 
         // Notify UI
-        if (onMessageReceived != null) onMessageReceived.accept(msg);
+        if (onMessageReceived != null)
+            onMessageReceived.accept(msg);
     }
 
     private void handleBroadcast(Message msg) {
@@ -452,17 +437,18 @@ public class P2PNode {
 
         ChatMessage cm = ChatMessage.fromDirect(
                 msg.getMessageId(), msg.getSenderPeerId(),
-                msg.getSenderUsername(), null, decrypted, false
-        );
+                msg.getSenderUsername(), null, decrypted, false);
         cm.setType(ChatMessage.MessageType.BROADCAST);
         messageRepo.saveMessage(cm);
 
-        if (onMessageReceived != null) onMessageReceived.accept(msg);
+        if (onMessageReceived != null)
+            onMessageReceived.accept(msg);
     }
 
     private void handleAck(Message msg) {
         String originalId = (String) msg.getMeta("originalMessageId");
-        if (originalId == null) return;
+        if (originalId == null)
+            return;
 
         // Cập nhật DB
         messageRepo.markDelivered(originalId);
@@ -477,10 +463,10 @@ public class P2PNode {
     private void handlePeerJoined(Message msg) {
         PeerInfo peerInfo = (PeerInfo) msg.getMeta("peerInfo");
         if (peerInfo == null) {
-            String ip   = (String)  msg.getMeta("ip");
+            String ip = (String) msg.getMeta("ip");
             Object portObj = msg.getMeta("port");
             int port = (portObj instanceof Integer i) ? i
-                    : (portObj instanceof Number  n) ? n.intValue() : 0;
+                    : (portObj instanceof Number n) ? n.intValue() : 0;
             if (ip == null || port == 0) {
                 log.warning("PEER_JOINED missing ip/port for: " + msg.getSenderPeerId());
                 return;
@@ -489,11 +475,10 @@ public class P2PNode {
         }
         final PeerInfo pi = peerInfo;
 
-        // Bỏ qua chính mình
-        if (pi.getPeerId().equals(peerId)) return;
+        if (pi.getPeerId().equals(peerId))
+            return;
 
         // Kiểm tra peer đã online chưa TRƯỚC KHI cập nhật
-        // để quyết định có forward hay không
         PeerInfo existing = knownPeers.get(pi.getPeerId());
         boolean wasAlreadyOnline = (existing != null && existing.isOnline());
 
@@ -512,14 +497,7 @@ public class P2PNode {
         // Gửi pending messages
         scheduler.submit(() -> deliverPendingMessages(pi.getPeerId()));
 
-        // QUAN TRỌNG: Forward PEER_JOINED tới tất cả connected peers
-        // Điều này đảm bảo peers join qua peer (không có BootstrapClient) vẫn nhận
-        // được thông báo khi có peer mới join qua Bootstrap.
-        // Ví dụ: B join qua A, C join qua Bootstrap. Khi Bootstrap gửi PEER_JOINED(C) cho A,
-        // A sẽ forward cho B để B biết C đã online.
-        //
-        // Chỉ forward nếu peer chưa từng online trước đó.
-        // Kiểm tra này ngăn vòng lặp vô hạn khi A forward cho B, B forward lại cho A...
+        // Forward PEER_JOINED tới tất cả connected peers
         if (!wasAlreadyOnline) {
             connections.forEach((pid, conn) -> {
                 if (!pid.equals(pi.getPeerId()) && conn.isConnected()) {
@@ -528,7 +506,8 @@ public class P2PNode {
             });
         }
 
-        if (onPeerStatusChanged != null) onPeerStatusChanged.accept(pi, true);
+        if (onPeerStatusChanged != null)
+            onPeerStatusChanged.accept(pi, true);
         notifySystem("🟢 " + pi.getUsername() + " joined the network.");
     }
 
@@ -537,11 +516,14 @@ public class P2PNode {
         PeerInfo pi = knownPeers.get(leftPeerId);
         if (pi != null) {
             // Nếu đã offline trước đó thì bỏ qua để tránh duplicate notify.
-            if (!pi.isOnline()) return;
+            if (!pi.isOnline())
+                return;
             pi.setOnline(false);
             ConnectionHandler conn = connections.remove(leftPeerId);
-            if (conn != null) conn.close();
-            if (onPeerStatusChanged != null) onPeerStatusChanged.accept(pi, false);
+            if (conn != null)
+                conn.close();
+            if (onPeerStatusChanged != null)
+                onPeerStatusChanged.accept(pi, false);
             notifySystem("🔴 " + pi.getUsername() + " left the network.");
         }
     }
@@ -562,9 +544,9 @@ public class P2PNode {
     }
 
     private void handleJoinGroup(Message msg) {
-        String groupId   = msg.getGroupId();
+        String groupId = msg.getGroupId();
         String newMember = msg.getSenderPeerId();
-        ChatGroup group  = groups.get(groupId);
+        ChatGroup group = groups.get(groupId);
         if (group != null) {
             group.addMember(newMember);
             groupRepo.addMember(groupId, newMember); // lưu DB2
@@ -607,7 +589,7 @@ public class P2PNode {
                 String line = iJoined
                         ? ("👋 You were added to \"" + updatedGroup.getGroupName() + "\".")
                         : ("👥 Group \"" + updatedGroup.getGroupName() + "\" updated — "
-                        + updatedGroup.getMemberPeerIds().size() + " members.");
+                                + updatedGroup.getMemberPeerIds().size() + " members.");
                 onGroupSync.accept(updatedGroup, line);
             }
         }
@@ -627,12 +609,12 @@ public class P2PNode {
      * sourceHandler được truyền thẳng từ PeerServer — luôn non-null.
      */
     private void handleGetPeers(Message msg, ConnectionHandler sourceHandler) {
-        String newPeerId   = msg.getSenderPeerId();
+        String newPeerId = msg.getSenderPeerId();
         String newUsername = msg.getSenderUsername();
-        Object portObj     = msg.getMeta("port");
-        int    newPort     = (portObj instanceof Integer i) ? i
-                : (portObj instanceof Number  n) ? n.intValue() : 0;
-        String newIp       = extractIp(sourceHandler.getRemoteAddress());
+        Object portObj = msg.getMeta("port");
+        int newPort = (portObj instanceof Integer i) ? i
+                : (portObj instanceof Number n) ? n.intValue() : 0;
+        String newIp = extractIp(sourceHandler.getRemoteAddress());
 
         log.info("[P2PNode] GET_PEERS from: " + newUsername + " @ " + newIp + ":" + newPort);
 
@@ -648,14 +630,12 @@ public class P2PNode {
         }
 
         // 3. Thêm peer mới vào knownPeers NGAY — để PEER_LIST bao gồm B
-        //    (thay vì đợi đến bước notify UI)
         if (newPeer != null) {
             knownPeers.put(newPeerId, newPeer);
             log.info("[P2PNode] Added new peer to knownPeers before sending PEER_LIST: " + newUsername);
         }
 
         // 4. Build PEER_LIST = bản thân + tất cả knownPeers đang online
-        //    (giờ B đã nằm trong knownPeers nên A sẽ thấy B trong PEER_LIST)
         List<PeerInfo> peerList = new ArrayList<>();
         PeerInfo myself = new PeerInfo(peerId, username, detectMyIp(), listeningPort);
         myself.setOnline(true);
@@ -674,8 +654,6 @@ public class P2PNode {
         log.info("[P2PNode] Sent PEER_LIST (" + peerList.size() + " peers) → " + newUsername);
 
         // 6. Thông báo cho Bootstrap Server biết peer mới đã join
-        //    → Bootstrap broadcast PEER_JOINED cho TẤT CẢ peers (kể cả những peer
-        //      không kết nối trực tiếp với A, như C join qua Bootstrap)
         if (newPeer != null && bootstrapClient != null && bootstrapClient.isConnected()) {
             bootstrapClient.notifyPeerJoined(newPeer);
         } else if (newPeer != null) {
@@ -688,13 +666,15 @@ public class P2PNode {
             Message joined = new Message(MessageType.PEER_JOINED, newPeerId, newUsername);
             joined.setSenderUsername(newUsername);
             joined.putMeta("peerInfo", newPeer);
-            joined.putMeta("ip",   newIp);
+            joined.putMeta("ip", newIp);
             joined.putMeta("port", newPort);
             connections.forEach((pid, conn) -> {
-                if (!pid.equals(newPeerId) && conn.isConnected()) conn.sendMessage(joined);
+                if (!pid.equals(newPeerId) && conn.isConnected())
+                    conn.sendMessage(joined);
             });
 
-            if (onPeerStatusChanged != null) onPeerStatusChanged.accept(newPeer, true);
+            if (onPeerStatusChanged != null)
+                onPeerStatusChanged.accept(newPeer, true);
             notifySystem("🟢 " + newUsername + " joined via peer relay.");
         }
     }
@@ -709,19 +689,19 @@ public class P2PNode {
     }
 
     private String extractIp(String remoteAddress) {
-        // remoteAddress có dạng "/192.168.1.5:49201" hoặc "192.168.1.5:49201"
-        if (remoteAddress == null) return "";
+        if (remoteAddress == null)
+            return "";
         String s = remoteAddress.replaceAll("^/", "");
         int colon = s.lastIndexOf(':');
         return colon > 0 ? s.substring(0, colon) : s;
     }
 
-    // ─── Bootstrap Events ──────────────────────────────────────────────────────
-
     /**
      * Xử lý events từ Bootstrap hoặc PeerJoinClient.
-     * Các message PEER_JOINED/LEFT đến từ bootstrap connection (không qua PeerServer).
-     * Các message khác (GROUP_CHAT, ACK...) có thể đến khi peer relay qua connection này.
+     * Các message PEER_JOINED/LEFT đến từ bootstrap connection (không qua
+     * PeerServer).
+     * Các message khác (GROUP_CHAT, ACK...) có thể đến khi peer relay qua
+     * connection này.
      */
     private void handleBootstrapEvent(Message msg) {
         log.info("[Bootstrap→] " + msg.getType() + " from=" + msg.getSenderPeerId()
@@ -732,20 +712,20 @@ public class P2PNode {
             return;
         }
         switch (msg.getType()) {
-            case PEER_JOINED  -> handlePeerJoined(msg);
-            case PEER_LEFT    -> handlePeerLeft(msg);
+            case PEER_JOINED -> handlePeerJoined(msg);
+            case PEER_LEFT -> handlePeerLeft(msg);
             // Các message P2P có thể đến qua kênh này khi join via peer
-            case CHAT         -> handleDirectChat(msg);
-            case GROUP_CHAT   -> handleGroupChat(msg);
-            case BROADCAST    -> handleBroadcast(msg);
-            case ACK          -> handleAck(msg);
+            case CHAT -> handleDirectChat(msg);
+            case GROUP_CHAT -> handleGroupChat(msg);
+            case BROADCAST -> handleBroadcast(msg);
+            case ACK -> handleAck(msg);
             case CREATE_GROUP -> handleCreateGroup(msg);
-            case GROUP_INFO   -> handleGroupInfo(msg);
-            case JOIN_GROUP   -> handleJoinGroup(msg);
-            case LEAVE_GROUP  -> handleLeaveGroup(msg);
+            case GROUP_INFO -> handleGroupInfo(msg);
+            case JOIN_GROUP -> handleJoinGroup(msg);
+            case LEAVE_GROUP -> handleLeaveGroup(msg);
             // Relay notification - peer mới online, gửi pending messages
             case STORE_NOTIFY -> handleStoreNotify(msg);
-            default           -> log.fine("[Bootstrap→] Ignored: " + msg.getType());
+            default -> log.fine("[Bootstrap→] Ignored: " + msg.getType());
         }
     }
 
@@ -795,15 +775,16 @@ public class P2PNode {
     }
 
     public boolean connectToPeer(PeerInfo peer) {
-        if (peer.getPeerId().equals(peerId)) return false;
-        if (connections.containsKey(peer.getPeerId())) return true;
+        if (peer.getPeerId().equals(peerId))
+            return false;
+        if (connections.containsKey(peer.getPeerId()))
+            return true;
 
         try {
             Socket socket = new Socket();
             socket.connect(
                     new java.net.InetSocketAddress(peer.getIpAddress(), peer.getPort()),
-                    CONNECTION_TIMEOUT_MS
-            );
+                    CONNECTION_TIMEOUT_MS);
             socket.setTcpNoDelay(true);
             socket.setKeepAlive(true);
 
@@ -811,8 +792,7 @@ public class P2PNode {
             ref[0] = new ConnectionHandler(
                     socket,
                     msg -> handleIncomingMessage(msg, ref[0]),
-                    () -> handlePeerDisconnected(peer.getPeerId())
-            );
+                    () -> handlePeerDisconnected(peer.getPeerId()));
             ConnectionHandler handler = ref[0];
             handler.setRemotePeerId(peer.getPeerId());
             connections.put(peer.getPeerId(), handler);
@@ -845,9 +825,11 @@ public class P2PNode {
         PeerInfo pi = knownPeers.get(peerId);
         if (pi != null) {
             // Có thể vừa nhận PEER_LEFT rồi socket mới đóng callback.
-            if (!pi.isOnline()) return;
+            if (!pi.isOnline())
+                return;
             pi.setOnline(false);
-            if (onPeerStatusChanged != null) onPeerStatusChanged.accept(pi, false);
+            if (onPeerStatusChanged != null)
+                onPeerStatusChanged.accept(pi, false);
             notifySystem("🔴 " + pi.getUsername() + " disconnected.");
         }
     }
@@ -856,11 +838,13 @@ public class P2PNode {
 
     private void deliverPendingMessages(String targetPeerId) {
         List<Message> pending = messageRepo.getPendingMessages(targetPeerId);
-        if (pending.isEmpty()) return;
+        if (pending.isEmpty())
+            return;
 
         log.info("Delivering " + pending.size() + " pending messages to " + targetPeerId);
         ConnectionHandler conn = connections.get(targetPeerId);
-        if (conn == null || !conn.isConnected()) return;
+        if (conn == null || !conn.isConnected())
+            return;
 
         for (Message msg : pending) {
             try {
@@ -873,7 +857,7 @@ public class P2PNode {
         }
     }
 
-    // ─── Heartbeat ─────────────────────────────────────────────────────────────
+    // ─── Heartbeat
 
     private void sendHeartbeats() {
         Message heartbeat = Message.createHeartbeat(peerId);
@@ -892,7 +876,8 @@ public class P2PNode {
     }
 
     private boolean isDuplicateIncomingMessage(Message msg) {
-        if (msg == null || msg.getMessageId() == null) return false;
+        if (msg == null || msg.getMessageId() == null)
+            return false;
         MessageType type = msg.getType();
         if (type != MessageType.CHAT
                 && type != MessageType.GROUP_CHAT
@@ -912,7 +897,7 @@ public class P2PNode {
         recentlyProcessedMessageIds.entrySet().removeIf(e -> e.getValue() < cutoff);
     }
 
-    // ─── Group Management ──────────────────────────────────────────────────────
+    // ─── Group Management
 
     public ChatGroup createGroup(String groupName) {
         String groupId = UUID.randomUUID().toString();
@@ -931,20 +916,22 @@ public class P2PNode {
         dbMsg.setGroupId(groupId);
         dbMsg.putMeta("group", group);
         try {
-            if (bootstrapClient != null) bootstrapClient.sendMessage(dbMsg);
+            if (bootstrapClient != null)
+                bootstrapClient.sendMessage(dbMsg);
         } catch (Exception e) {
             log.warning("Failed to notify bootstrap of new group: " + e.getMessage());
         }
 
         // 4. Broadcast tới tất cả peers đang kết nối
-//        broadcastToAllPeers(dbMsg);
+        // broadcastToAllPeers(dbMsg);
 
         return group;
     }
 
     public void invitePeerToGroup(String groupId, String targetPeerId) {
         ChatGroup group = groups.get(groupId);
-        if (group == null) return;
+        if (group == null)
+            return;
 
         // Thêm member mới vào group object
         group.addMember(targetPeerId);
@@ -956,10 +943,8 @@ public class P2PNode {
         groupRepo.addMember(groupId, targetPeerId);
 
         // Gửi GROUP_INFO (group đầy đủ) tới:
-        //   1. targetPeer: để họ biết họ đã join group
-        //   2. TẤT CẢ members hiện tại: để họ cập nhật member list mới nhất
-        // Quan trọng: nếu không broadcast, các member cũ không biết member mới
-        // → sendGroupMessage sẽ thiếu member trong loop → không gửi tới đủ người
+        // 1. targetPeer: để họ biết họ đã join group
+        // 2. TẤT CẢ members hiện tại: để họ cập nhật member list mới nhất
         Message groupInfoMsg = new Message(MessageType.GROUP_INFO, peerId, "invite");
         groupInfoMsg.setGroupId(groupId);
         groupInfoMsg.putMeta("group", group); // gửi cả group object với member list mới nhất
@@ -983,7 +968,8 @@ public class P2PNode {
 
     public void leaveGroup(String groupId) {
         ChatGroup group = groups.get(groupId);
-        if (group == null) return;
+        if (group == null)
+            return;
 
         group.removeMember(peerId);
         Message msg = new Message(MessageType.LEAVE_GROUP, peerId, "leave");
@@ -1000,14 +986,16 @@ public class P2PNode {
         } else {
             for (String memberId : group.getMemberPeerIds()) {
                 ConnectionHandler conn = connections.get(memberId);
-                if (conn != null && conn.isConnected()) conn.sendMessage(msg);
+                if (conn != null && conn.isConnected())
+                    conn.sendMessage(msg);
             }
         }
 
         groups.remove(groupId);
         groupRepo.deleteGroup(groupId);
 
-        if (onLocalGroupLeft != null) onLocalGroupLeft.accept(groupId);
+        if (onLocalGroupLeft != null)
+            onLocalGroupLeft.accept(groupId);
     }
 
     // ─── File transfer (direct P2P only) ───────────────────────────────────────
@@ -1020,7 +1008,7 @@ public class P2PNode {
         final ByteArrayOutputStream accumulator = new ByteArrayOutputStream();
 
         IncomingFileAssembly(String senderPeerId, String senderUsername,
-                             String fileName, long fileSize) {
+                String fileName, long fileSize) {
             this.senderPeerId = senderPeerId;
             this.senderUsername = senderUsername;
             this.fileName = fileName;
@@ -1029,22 +1017,25 @@ public class P2PNode {
     }
 
     private static int totalChunksForFileSize(long fileSize) {
-        if (fileSize <= 0) return 0;
+        if (fileSize <= 0)
+            return 0;
         return (int) ((fileSize + FILE_CHUNK_BYTES - 1) / FILE_CHUNK_BYTES);
     }
 
     private static String safeIncomingFileName(String name) {
-        if (name == null || name.isBlank()) return "received.bin";
+        if (name == null || name.isBlank())
+            return "received.bin";
         String n = name.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
         return n.isEmpty() ? "received.bin" : n;
     }
 
     /**
      * Gửi file tới một peer qua kết nối TCP trực tiếp (không hàng đợi offline).
-     * @return true nếu gửi xong (tối đa ~50 MB)
+     * return true nếu gửi xong (tối đa ~50 MB)
      */
     public boolean sendDirectFile(String targetPeerId, File file) throws IOException {
-        if (file == null || !file.isFile()) return false;
+        if (file == null || !file.isFile())
+            return false;
         long len = file.length();
         if (len > MAX_FILE_TRANSFER_BYTES) {
             notifySystem("File too large (max 50 MB).");
@@ -1096,7 +1087,8 @@ public class P2PNode {
         ChatMessage cm = ChatMessage.fromDirectFile(UUID.randomUUID().toString(),
                 peerId, username, targetPeerId, display, true);
         messageRepo.saveMessage(cm);
-        if (onChatArtifact != null) onChatArtifact.accept(cm);
+        if (onChatArtifact != null)
+            onChatArtifact.accept(cm);
         return true;
     }
 
@@ -1119,9 +1111,8 @@ public class P2PNode {
 
         // Gửi REQUEST tới tất cả member đang connect
         Message req = Message.createGroupFileRequest(
-            peerId, username, groupId, transferId,
-            file.getName(), fileSize, totalChunks
-        );
+                peerId, username, groupId, transferId,
+                file.getName(), fileSize, totalChunks);
         sendToGroupConnections(group, req);
 
         scheduler.submit(() -> {
@@ -1132,21 +1123,22 @@ public class P2PNode {
                 while ((read = fis.read(buf)) != -1 && !aborted.get()) {
                     byte[] data = Arrays.copyOf(buf, read);
                     Message chunk = Message.createGroupFileChunk(
-                        peerId, username, groupId, transferId,
-                    chunkIndex, totalChunks, data);
+                            peerId, username, groupId, transferId,
+                            chunkIndex, totalChunks, data);
                     sendToGroupConnections(group, chunk);
                     chunkIndex++;
                 }
                 if (!aborted.get()) {
                     Message done = Message.createGroupFileComplete(
-                        peerId, username, groupId, transferId);
+                            peerId, username, groupId, transferId);
                     sendToGroupConnections(group, done);
-                    
+
                     String display = "📎 Sent: " + file.getName();
                     ChatMessage cm = ChatMessage.fromGroupFile(UUID.randomUUID().toString(),
-                    peerId, username, groupId, display, true);
+                            peerId, username, groupId, display, true);
                     messageRepo.saveMessage(cm);
-                    if (onChatArtifact != null) onChatArtifact.accept(cm);
+                    if (onChatArtifact != null)
+                        onChatArtifact.accept(cm);
                 }
             } catch (IOException e) {
                 log.severe("sendGroupFile error: " + e.getMessage());
@@ -1160,7 +1152,8 @@ public class P2PNode {
     /** Gửi message tới tất cả member trong group mà mình đang có kết nối TCP */
     private void sendToGroupConnections(ChatGroup group, Message msg) {
         for (String memberId : group.getMemberPeerIds()) {
-            if (memberId.equals(peerId)) continue;
+            if (memberId.equals(peerId))
+                continue;
             ConnectionHandler conn = connections.get(memberId);
             if (conn != null && conn.isConnected()) {
                 conn.sendMessage(msg);
@@ -1178,12 +1171,14 @@ public class P2PNode {
     }
 
     private void handleFileTransferRequest(Message msg) {
-        if (!peerId.equals(msg.getTargetPeerId())) return;
+        if (!peerId.equals(msg.getTargetPeerId()))
+            return;
         String transferId = (String) msg.getMeta("transferId");
         String rawName = (String) msg.getMeta("fileName");
         Object fsObj = msg.getMeta("fileSize");
         Object tcObj = msg.getMeta("totalChunks");
-        if (transferId == null || fsObj == null || tcObj == null) return;
+        if (transferId == null || fsObj == null || tcObj == null)
+            return;
 
         long fileSize = fsObj instanceof Number n ? n.longValue() : Long.parseLong(fsObj.toString());
         int totalChunks = tcObj instanceof Number n ? n.intValue() : Integer.parseInt(tcObj.toString());
@@ -1203,13 +1198,16 @@ public class P2PNode {
     }
 
     private void handleFileChunk(Message msg) {
-        if (!peerId.equals(msg.getTargetPeerId())) return;
+        if (!peerId.equals(msg.getTargetPeerId()))
+            return;
         String transferId = (String) msg.getMeta("transferId");
         Object dataObj = msg.getMeta("data");
-        if (transferId == null || !(dataObj instanceof byte[] data)) return;
+        if (transferId == null || !(dataObj instanceof byte[] data))
+            return;
 
         IncomingFileAssembly asm = incomingFileTransfers.get(transferId);
-        if (asm == null) return;
+        if (asm == null)
+            return;
         synchronized (asm) {
             if (asm.accumulator.size() + data.length > asm.fileSize + FILE_CHUNK_BYTES) {
                 incomingFileTransfers.remove(transferId);
@@ -1226,12 +1224,15 @@ public class P2PNode {
     }
 
     private void handleFileTransferComplete(Message msg) {
-        if (!peerId.equals(msg.getTargetPeerId())) return;
+        if (!peerId.equals(msg.getTargetPeerId()))
+            return;
         String transferId = (String) msg.getMeta("transferId");
-        if (transferId == null) return;
+        if (transferId == null)
+            return;
 
         IncomingFileAssembly asm = incomingFileTransfers.remove(transferId);
-        if (asm == null) return;
+        if (asm == null)
+            return;
 
         byte[] payload;
         synchronized (asm) {
@@ -1249,31 +1250,35 @@ public class P2PNode {
         ChatMessage cm = ChatMessage.fromDirectFile(messageId,
                 asm.senderPeerId, asm.senderUsername, peerId, content, false);
         messageRepo.saveMessage(cm);
-        if (onChatArtifact != null) onChatArtifact.accept(cm);
+        if (onChatArtifact != null)
+            onChatArtifact.accept(cm);
         notifySystem("📥 " + asm.senderUsername + " sent a file — open chat to download.");
     }
 
     private void handleGroupFileRequest(Message msg) {
         String groupId = msg.getGroupId();
         String transferId = (String) msg.getMeta("transferId");
-        if (groupId == null || transferId == null) return;
-        if (isDuplicateIncomingMessage(msg)) return;
-        
+        if (groupId == null || transferId == null)
+            return;
+        if (isDuplicateIncomingMessage(msg))
+            return;
+
         // Tạo assembly
         String fileName = (String) msg.getMeta("fileName");
-        long   fileSize = ((Number) msg.getMeta("fileSize")).longValue();
+        long fileSize = ((Number) msg.getMeta("fileSize")).longValue();
         IncomingFileAssembly asm = new IncomingFileAssembly(
-            msg.getSenderPeerId(), msg.getSenderUsername(),
-            fileName, fileSize);
+                msg.getSenderPeerId(), msg.getSenderUsername(),
+                fileName, fileSize);
         incomingFileTransfers.put(transferId, asm);
 
-        //relay tới các member khác
+        // relay tới các member khác
         relayGroupFileMsg(msg, groupId);
     }
 
     private void handleGroupFileChunk(Message msg) {
         String transferId = (String) msg.getMeta("transferId");
-        if (transferId == null) return;
+        if (transferId == null)
+            return;
 
         IncomingFileAssembly asm = incomingFileTransfers.get(transferId);
         if (asm != null) {
@@ -1283,14 +1288,15 @@ public class P2PNode {
             }
         }
 
-        //relay tiếp (dùng relayKey chống loop)
+        // relay tiếp (dùng relayKey chống loop)
         relayGroupFileMsg(msg, msg.getGroupId());
     }
 
     private void handleGroupFileComplete(Message msg) {
         String transferId = (String) msg.getMeta("transferId");
-        if (transferId == null) return;
-    
+        if (transferId == null)
+            return;
+
         IncomingFileAssembly asm = incomingFileTransfers.remove(transferId);
         if (asm != null) {
             byte[] payload = asm.accumulator.toByteArray();
@@ -1299,35 +1305,41 @@ public class P2PNode {
             receivedFilePayloads.put(mid, payload);
 
             String content = ChatMessage.FILE_PENDING_MARKER
-                + "\n" + asm.fileName
-                + "\n" + asm.fileSize;
-    
+                    + "\n" + asm.fileName
+                    + "\n" + asm.fileSize;
+
             ChatMessage cm = ChatMessage.fromGroupFile(
                     mid, msg.getSenderPeerId(), msg.getSenderUsername(),
                     msg.getGroupId(), content, false);
             messageRepo.saveMessage(cm);
-    
-            if (onChatArtifact != null) onChatArtifact.accept(cm);
+
+            if (onChatArtifact != null)
+                onChatArtifact.accept(cm);
             notifySystem("📥 " + asm.senderUsername
                     + " gửi file vào nhóm — mở group chat để tải về.");
         }
-    
+
         relayGroupFileMsg(msg, msg.getGroupId());
     }
 
     /** Relay group file message tới các member khác, chống loop bằng relayKey */
     private void relayGroupFileMsg(Message msg, String groupId) {
-        if (groupId == null) return;
+        if (groupId == null)
+            return;
         ChatGroup group = groups.get(groupId);
-        if (group == null) return;
+        if (group == null)
+            return;
 
         String relayKey = "relayed_" + msg.getMessageId();
-        if (msg.getMeta(relayKey) != null) return; // đã relay rồi
+        if (msg.getMeta(relayKey) != null)
+            return; // đã relay rồi
         msg.putMeta(relayKey, true);
 
         for (String memberId : group.getMemberPeerIds()) {
-            if (memberId.equals(msg.getSenderPeerId())) continue;
-            if (memberId.equals(peerId)) continue;
+            if (memberId.equals(msg.getSenderPeerId()))
+                continue;
+            if (memberId.equals(peerId))
+                continue;
             ConnectionHandler conn = connections.get(memberId);
             if (conn != null && conn.isConnected()) {
                 conn.sendMessage(msg);
@@ -1340,36 +1352,46 @@ public class P2PNode {
         return messageId != null && receivedFilePayloads.containsKey(messageId);
     }
 
-    /** Dữ liệu file nhận (không xóa — gọi {@link #consumeReceivedFilePayload} sau khi ghi file). */
+    /**
+     * Dữ liệu file nhận (không xóa — gọi {consumeReceivedFilePayload} sau khi ghi
+     * file).
+     */
     public byte[] peekReceivedFilePayload(String messageId) {
-        if (messageId == null) return null;
+        if (messageId == null)
+            return null;
         return receivedFilePayloads.get(messageId);
     }
 
     public void consumeReceivedFilePayload(String messageId) {
-        if (messageId != null) receivedFilePayloads.remove(messageId);
+        if (messageId != null)
+            receivedFilePayloads.remove(messageId);
     }
 
-    /** Sau khi user lưu file: cập nhật DB để lần mở sau hiện đường dẫn, không còn nút tải. */
+    /**
+     * Sau khi user lưu file: cập nhật DB để lần mở sau hiện đường dẫn, không còn
+     * nút tải.
+     */
     public void markReceivedFileSavedInHistory(String messageId, java.nio.file.Path savedPath) {
-        if (messageId == null || savedPath == null) return;
+        if (messageId == null || savedPath == null)
+            return;
         String content = ChatMessage.FILE_SAVED_MARKER + "\n" + savedPath.toAbsolutePath();
         messageRepo.updateMessageContent(messageId, content);
     }
 
     private void handleFileTransferReject(Message msg) {
-        if (!peerId.equals(msg.getTargetPeerId())) return;
+        if (!peerId.equals(msg.getTargetPeerId()))
+            return;
         String transferId = (String) msg.getMeta("transferId");
         if (transferId != null) {
             AtomicBoolean a = fileSendAborted.get(transferId);
-            if (a != null) a.set(true);
+            if (a != null)
+                a.set(true);
         }
         String reason = msg.getContent() != null && !msg.getContent().isEmpty()
-                ? msg.getContent() : "rejected";
+                ? msg.getContent()
+                : "rejected";
         notifySystem("File transfer: " + reason);
     }
-
-    // ─── Helpers ───────────────────────────────────────────────────────────────
 
     private String getPeerUsername(String peerId) {
         PeerInfo pi = knownPeers.get(peerId);
@@ -1378,44 +1400,87 @@ public class P2PNode {
 
     private void notifySystem(String event) {
         log.info("[SYSTEM] " + event);
-        if (onSystemEvent != null) onSystemEvent.accept(event);
+        if (onSystemEvent != null)
+            onSystemEvent.accept(event);
     }
 
-    // ─── Getters / Setters ─────────────────────────────────────────────────────
+    public String getPeerId() {
+        return peerId;
+    }
 
-    public String getPeerId() { return peerId; }
-    public String getUsername() { return username; }
-    public int getListeningPort() { return listeningPort; }
-    public Map<String, PeerInfo> getKnownPeers() { return Collections.unmodifiableMap(knownPeers); }
-    public Map<String, ConnectionHandler> getConnections() { return Collections.unmodifiableMap(connections); }
+    public String getUsername() {
+        return username;
+    }
+
+    public int getListeningPort() {
+        return listeningPort;
+    }
+
+    public Map<String, PeerInfo> getKnownPeers() {
+        return Collections.unmodifiableMap(knownPeers);
+    }
+
+    public Map<String, ConnectionHandler> getConnections() {
+        return Collections.unmodifiableMap(connections);
+    }
 
     /** Có kết nối TCP trực tiếp tới peer (dùng cho gợi ý offline / queue). */
     public boolean isDirectPeerConnected(String peerId) {
         ConnectionHandler c = connections.get(peerId);
         return c != null && c.isConnected();
     }
-    public Map<String, ChatGroup> getGroups() { return Collections.unmodifiableMap(groups); }
-    public MessageRepository getMessageRepository() { return messageRepo; }
 
-    public void setOnMessageReceived(Consumer<Message> handler) { this.onMessageReceived = handler; }
-    public void setOnAckReceived(Consumer<String> handler) { this.onAckReceived = handler; }
-    public void setOnPeerStatusChanged(BiConsumer<PeerInfo, Boolean> handler) { this.onPeerStatusChanged = handler; }
-    public void setOnSystemEvent(Consumer<String> handler) { this.onSystemEvent = handler; }
-    public void setOnGroupSync(BiConsumer<ChatGroup, String> handler) { this.onGroupSync = handler; }
-    public void setOnLocalGroupLeft(Consumer<String> handler) { this.onLocalGroupLeft = handler; }
-    public void setOnChatArtifact(Consumer<ChatMessage> handler) { this.onChatArtifact = handler; }
+    public Map<String, ChatGroup> getGroups() {
+        return Collections.unmodifiableMap(groups);
+    }
+
+    public MessageRepository getMessageRepository() {
+        return messageRepo;
+    }
+
+    public void setOnMessageReceived(Consumer<Message> handler) {
+        this.onMessageReceived = handler;
+    }
+
+    public void setOnAckReceived(Consumer<String> handler) {
+        this.onAckReceived = handler;
+    }
+
+    public void setOnPeerStatusChanged(BiConsumer<PeerInfo, Boolean> handler) {
+        this.onPeerStatusChanged = handler;
+    }
+
+    public void setOnSystemEvent(Consumer<String> handler) {
+        this.onSystemEvent = handler;
+    }
+
+    public void setOnGroupSync(BiConsumer<ChatGroup, String> handler) {
+        this.onGroupSync = handler;
+    }
+
+    public void setOnLocalGroupLeft(Consumer<String> handler) {
+        this.onLocalGroupLeft = handler;
+    }
+
+    public void setOnChatArtifact(Consumer<ChatMessage> handler) {
+        this.onChatArtifact = handler;
+    }
+
     public void setOnBootstrapStatusChanged(java.util.function.Consumer<BootstrapStatus> handler) {
         this.onBootstrapStatus = handler;
     }
+
     public void setOnRelayStatusChanged(java.util.function.Consumer<RelayClient.RelayConnectionStatus> handler) {
         this.onRelayStatus = handler;
     }
+
     public void setOnPendingCountChanged(java.util.function.Consumer<Integer> handler) {
         this.onPendingCountChanged = handler;
     }
-    public int getPendingOfflineCount() { return pendingOfflineCount; }
 
-    // ─── Relay Server Integration ───────────────────────────────────────────────
+    public int getPendingOfflineCount() {
+        return pendingOfflineCount;
+    }
 
     /**
      * Kết nối đến Relay Server để gửi/nhận tin nhắn offline.
@@ -1444,7 +1509,6 @@ public class P2PNode {
         });
 
         // Kết nối và đăng ký TRƯỚC, sau đó mới start listener
-        // Điều này đảm bảo rằng khi listener bắt đầu, streams đã được khởi tạo
         Thread relayThread = new Thread(() -> {
             if (relayClient.connectAndRegister()) {
                 log.info("[P2PNode] Connected to relay server at " + relayHost + ":" + relayPort);
@@ -1493,7 +1557,8 @@ public class P2PNode {
     private void handleRelayMessage(Message msg) {
         log.info("[P2PNode] Relay message received: " + msg.getType());
 
-        // ACK ngược từ receiver (đã nhận tin offline) → đánh dấu delivered trong DB local
+        // ACK ngược từ receiver (đã nhận tin offline) → đánh dấu delivered trong DB
+        // local
         if (msg.getType() == MessageType.ACK) {
             handleAck(msg);
             return;
@@ -1506,8 +1571,7 @@ public class P2PNode {
         // Lưu vào DB
         ChatMessage cm = ChatMessage.fromDirect(
                 msg.getMessageId(), msg.getSenderPeerId(),
-                msg.getSenderUsername(), peerId, decrypted, false
-        );
+                msg.getSenderUsername(), peerId, decrypted, false);
         messageRepo.saveMessage(cm);
 
         // Xóa khỏi relay server (đã nhận thành công)

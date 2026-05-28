@@ -4,7 +4,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Registry quản lý các kết nối peer đang online với relay server.
- * Cho phép gửi thông báo đến peers cụ thể.
  */
 public class RelayClientHandlerRegistry {
 
